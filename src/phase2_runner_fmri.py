@@ -218,16 +218,36 @@ def run_phase2_fmri():
 
     print("\n[Phase2-fMRI] Running Gate F2 (controls collapse)...")
 
+    from src.controls_phase2_fmri import phase_randomize_bold
+
     eps_controls = []
-    rng = np.random.default_rng(cfg.random_seed)
 
     for i in range(cfg.n_controls):
-        # Shuffle state IDs
-        shuffled_ids = state_ids.copy()
-        rng.shuffle(shuffled_ids)
+        # Phase randomize continuous BOLD
+        ctrl_data = phase_randomize_bold(
+            df.to_numpy(),
+            seed=cfg.random_seed + i
+        )
+
+        # Convert back to dataframe
+        ctrl_df = df.copy()
+        ctrl_df.iloc[:, :] = ctrl_data
+
+        # Discretize with same bins
+        ctrl_disc, _ = fit_and_discretize(
+            ctrl_df,
+            n_bins=cfg.n_bins,
+            quantiles=cfg.quantiles,
+            fit_on_index=idx_train,
+        )
+
+        # Encode states
+        ctrl_components = ctrl_disc.to_numpy(dtype=int)
+        ctrl_ids = encode_states(ctrl_components, enc)
 
         # Build transitions
-        c_ctrl, n_ctrl = build_transitions(shuffled_ids)
+        c_ctrl, n_ctrl = build_transitions(ctrl_ids)
+
         c_ctrl_train = c_ctrl[:split - 1]
         n_ctrl_train = n_ctrl[:split - 1]
 
@@ -243,6 +263,7 @@ def run_phase2_fmri():
         )
 
         eps_controls.append(eps_c)
+
         print(f"  Control {i + 1}/{cfg.n_controls}: eps={eps_c:.4f}")
 
     gate2 = gate_F2_controls_collapse(
@@ -269,42 +290,47 @@ def run_phase2_fmri():
 
     print("\n[Phase2-fMRI] Running Gate F5 (sensitivity)...")
 
-    df_disc2, _ = fit_and_discretize(
+    # Sensitivity test with SAME number of bins (2),
+    # perturbing only the quantile threshold.
+    # This isolates discretization sensitivity without exploding state space.
+
+    df_disc2_alt, _ = fit_and_discretize(
         df,
-        n_bins=3,
-        quantiles=(0.25, 0.75),
+        n_bins=2,
+        quantiles=(0.45,),
         fit_on_index=idx_train,
     )
 
-    comps4 = df_disc2.to_numpy(dtype=int)
-    enc4 = make_encoding(n_components=n_components, n_bins=3)
-    n_states4 = 3 ** n_components
-    ids4 = encode_states(comps4, enc4)
-    c4, n4 = build_transitions(ids4)
-    c4_train = c4[:split - 1]
-    n4_train = n4[:split - 1]
+    comps2_alt = df_disc2_alt.to_numpy(dtype=int)
+    enc2_alt = make_encoding(n_components=n_components, n_bins=2)
+    n_states2_alt = 2 ** n_components
+    ids2_alt = encode_states(comps2_alt, enc2_alt)
 
-    P0_4 = EmpiricalKernel.from_transitions(
-        c4_train,
-        n4_train,
-        n_states=n_states4,
-        enc=enc4,
+    c2_alt, n2_alt = build_transitions(ids2_alt)
+    c2_alt_train = c2_alt[:split - 1]
+    n2_alt_train = n2_alt[:split - 1]
+
+    P0_2_alt = EmpiricalKernel.from_transitions(
+        c2_alt_train,
+        n2_alt_train,
+        n_states=n_states2_alt,
+        enc=enc2_alt,
         alpha=cfg.dirichlet_alpha,
     )
 
-    eps_bins4, _ = _estimate_epsilon_grid(
-        c4_train,
-        n4_train,
-        P0_4,
+    eps_bins2_alt, _ = _estimate_epsilon_grid(
+        c2_alt_train,
+        n2_alt_train,
+        P0_2_alt,
         eps_grid,
         cfg.min_prob,
-        label="bins4",
+        label="bins2_alt_q045",
         progress_every=10,
     )
 
     gate5 = gate_F5_sensitivity(
         eps_binsA=eps_train,
-        eps_binsB=eps_bins4,
+        eps_binsB=eps_bins2_alt,
         max_delta=cfg.sensitivity_delta,
     )
 
@@ -337,7 +363,7 @@ def run_phase2_fmri():
         "eps_hat_test": eps_test,
         "eps_hat_injection": eps_injected,
         "eps_controls": eps_controls,
-        "eps_hat_bins4": eps_bins4,
+        "eps_hat_bins2_alt_q045": eps_bins2_alt,
         "gates": summary,
     }
 
