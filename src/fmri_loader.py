@@ -267,7 +267,7 @@ def load_subject_timeseries(
 
     roi_cols = [c for c in df.columns if c != "time_seconds"]
     n_rois_total = len(roi_cols)
-    target_n_rois = 6  # 3^6 = 729 states (computationally feasible)
+    target_n_rois = 5  # 3^6 = 729 states (computationally feasible)
 
     if n_rois_total > target_n_rois:
         # Select evenly spaced ROIs across brain

@@ -271,14 +271,14 @@ def run_phase2_fmri():
 
     df_disc2, _ = fit_and_discretize(
         df,
-        n_bins=4,
+        n_bins=3,
         quantiles=(0.25, 0.75),
         fit_on_index=idx_train,
     )
 
     comps4 = df_disc2.to_numpy(dtype=int)
-    enc4 = make_encoding(n_components=n_components, n_bins=4)
-    n_states4 = 4 ** n_components
+    enc4 = make_encoding(n_components=n_components, n_bins=3)
+    n_states4 = 3 ** n_components
     ids4 = encode_states(comps4, enc4)
     c4, n4 = build_transitions(ids4)
     c4_train = c4[:split - 1]

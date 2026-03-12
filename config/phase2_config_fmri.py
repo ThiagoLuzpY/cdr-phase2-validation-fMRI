@@ -41,8 +41,8 @@ class Phase2FMRIConfig:
     # Discretization
     # =========================
 
-    n_bins: int = 3
-    quantiles: Tuple[float, float] = (0.33, 0.66)
+    n_bins: int = 2
+    quantiles: Tuple[float, float] = (0.5,)
     strategy: str = "quantile"
 
     # =========================
@@ -55,7 +55,7 @@ class Phase2FMRIConfig:
     # Kernel parameters
     # =========================
 
-    dirichlet_alpha: float = 0.01  # Smoothing for empirical kernel P0
+    dirichlet_alpha: float = 0.1  # Smoothing for empirical kernel P0
     min_prob: float = 1e-12  # Minimum probability for log-likelihood
     eps_grid: Tuple[float, ...] = tuple([i * 0.01 for i in range(0, 81)])  # 0.00 to 0.80
 
@@ -71,7 +71,7 @@ class Phase2FMRIConfig:
     gate_tol_abs: float = 0.05
     control_tol: float = 0.05
     control_fraction: float = 2 / 3
-    n_controls: int = 4
+    n_controls: int = 20
     sensitivity_delta: float = 0.12
     holdout_delta: float = 0.10
 
@@ -97,12 +97,24 @@ class Phase2FMRIConfig:
         if self.n_bins < 2:
             raise ValueError("n_bins must be >= 2")
 
-        if not isinstance(self.quantiles, tuple) or len(self.quantiles) != 2:
-            raise ValueError("quantiles must be a tuple like (0.33, 0.66)")
+        if not isinstance(self.quantiles, tuple):
+            raise ValueError("quantiles must be a tuple")
 
-        q_lo, q_hi = self.quantiles
-        if not (0.0 < q_lo < q_hi < 1.0):
-            raise ValueError("quantiles must satisfy 0 < q_lo < q_hi < 1")
+        if any(q <= 0 or q >= 1 for q in self.quantiles):
+            raise ValueError("quantiles must be between 0 and 1")
+
+        if self.n_bins == 2:
+            if len(self.quantiles) != 1:
+                raise ValueError("for n_bins=2, quantiles must have exactly 1 value, e.g. (0.5,)")
+        elif self.n_bins == 3:
+            if len(self.quantiles) != 2:
+                raise ValueError("for n_bins=3, quantiles must have exactly 2 values, e.g. (0.33, 0.66)")
+            q_lo, q_hi = self.quantiles
+            if not (0.0 < q_lo < q_hi < 1.0):
+                raise ValueError("quantiles must satisfy 0 < q_lo < q_hi < 1")
+        else:
+            if len(self.quantiles) < 1:
+                raise ValueError("quantiles must contain at least 1 value")
 
         if self.lag < 1:
             raise ValueError("lag must be >= 1")
